@@ -120,6 +120,12 @@ class DVRouter(DVRouterBase):
         :param port: the port that the advertisement arrived on.
         :return: nothing.
         """
+        if route_latency == INFINITY: # poisoned
+            if route_dst in self.table and self.table[route_dst].port == port:
+                entry = self.table[route_dst]
+                self.table[route_dst] = TableEntry(dst=route_dst, port=port, latency=INFINITY,
+                    expire_time=self.ROUTE_TTL+api.current_time() if entry.latency<INFINITY else entry.expire_time)
+            return
         tim = route_latency + self.ports.get_latency(port)
         if (route_dst not in self.table) or (tim < self.table[route_dst].latency) or (port == self.table[route_dst].port):
             self.table[route_dst] = TableEntry(dst=route_dst, port=port, latency=tim, expire_time=self.ROUTE_TTL+api.current_time())
