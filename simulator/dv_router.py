@@ -5,7 +5,6 @@ Based on skeleton code by:
   MurphyMc, zhangwen0411, lab352
 """
 
-from collections import defaultdict
 import sim.api as api
 from cs168.dv import RoutePacket, \
                      Table, TableEntry, \
@@ -23,17 +22,17 @@ class DVRouter(DVRouterBase):
     # -----------------------------------------------
     # At most one of these should ever be on at once
     SPLIT_HORIZON = False
-    POISON_REVERSE = True
+    POISON_REVERSE = False
     # -----------------------------------------------
     
     # Determines if you send poison for expired routes
-    POISON_EXPIRED = True
+    POISON_EXPIRED = False
 
     # Determines if you send updates when a link comes up
-    SEND_ON_LINK_UP = True
+    SEND_ON_LINK_UP = False
 
     # Determines if you send poison when a link goes down
-    POISON_ON_LINK_DOWN = True
+    POISON_ON_LINK_DOWN = False
 
     def __init__(self):
         """
@@ -53,7 +52,8 @@ class DVRouter(DVRouterBase):
         # This is the table that contains all current routes
         self.table = Table()
         self.table.owner = self
-        self.last_table = defaultdict(Table)
+        self.last_table = Table()
+        self.last_table.owner = self
 
     def add_static_route(self, host, port):
         """
@@ -70,7 +70,7 @@ class DVRouter(DVRouterBase):
         # when the link came up.
         assert port in self.ports.get_all_ports(), "Link should be up, but is not."
         self.table[host] = TableEntry(dst=host, port=port, latency=self.ports.get_latency(port), expire_time=FOREVER)
-
+        self.send_routes(force=False)
 
     def handle_data_packet(self, packet, in_port):
         """
@@ -91,16 +91,13 @@ class DVRouter(DVRouterBase):
     def send_single(self, force=False, port=None):
         """
         Send route advertisements for a single port in the table
-        Updates last_table.
+        Do NOT update last_table.
         """
         assert port is not None
-        last = self.last_table[port]
         for host, entry in self.table.items():
-            if not force and host in last and last[host] == entry: continue
+            if not force and host in self.last_table and self.last_table[host] == entry: continue
             if not self.SPLIT_HORIZON or port != entry.port:
                 self.send_route(port=port, dst=host, latency=entry.latency if entry.port!=port or not self.POISON_REVERSE else INFINITY)
-        self.last_table[port] = Table(self.table)
-        assert id(self.last_table[port]) != id(self.table)
         
     def send_routes(self, force=False, single_port=None):
         """
@@ -119,6 +116,9 @@ class DVRouter(DVRouterBase):
         else:
             for port in self.ports.get_all_ports():
                 self.send_single(force, port)
+        self.last_table = self.table
+        self.table = Table(self.last_table)
+        assert id(self.last_table) != id(self.table)
 
     def expire_routes(self):
         """
@@ -147,10 +147,11 @@ class DVRouter(DVRouterBase):
                 entry = self.table[route_dst]
                 self.table[route_dst] = TableEntry(dst=route_dst, port=port, latency=INFINITY,
                     expire_time=self.ROUTE_TTL+api.current_time() if entry.latency<INFINITY else entry.expire_time)
-            return
-        tim = route_latency + self.ports.get_latency(port)
-        if (route_dst not in self.table) or (tim < self.table[route_dst].latency) or (port == self.table[route_dst].port):
-            self.table[route_dst] = TableEntry(dst=route_dst, port=port, latency=tim, expire_time=self.ROUTE_TTL+api.current_time())
+        else:
+            tim = route_latency + self.ports.get_latency(port)
+            if (route_dst not in self.table) or (tim < self.table[route_dst].latency) or (port == self.table[route_dst].port):
+                self.table[route_dst] = TableEntry(dst=route_dst, port=port, latency=tim, expire_time=self.ROUTE_TTL+api.current_time())
+        self.send_routes(force=False)
 
     def handle_link_up(self, port, latency):
         """
