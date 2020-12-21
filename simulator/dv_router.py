@@ -21,7 +21,7 @@ class DVRouter(DVRouterBase):
 
     # -----------------------------------------------
     # At most one of these should ever be on at once
-    SPLIT_HORIZON = False
+    SPLIT_HORIZON = True
     POISON_REVERSE = False
     # -----------------------------------------------
     
@@ -102,7 +102,8 @@ class DVRouter(DVRouterBase):
         assert force and (single_port is None)
         for port in self.ports.get_all_ports():
             for host, entry in self.table.items():
-                self.send_route(port=port, dst=host, latency=entry.latency)
+                if not self.SPLIT_HORIZON or port != entry.port:
+                    self.send_route(port=port, dst=host, latency=entry.latency)
     def expire_routes(self):
         """
         Clears out expired routes from table.
