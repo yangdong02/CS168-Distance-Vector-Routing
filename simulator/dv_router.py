@@ -119,7 +119,9 @@ class DVRouter(DVRouterBase):
         :param port: the port that the advertisement arrived on.
         :return: nothing.
         """
-        # TODO: fill this in!
+        tim = route_latency + self.ports.get_latency(port)
+        if (route_dst not in self.table) or (tim < self.table[route_dst].latency) or (port == self.table[route_dst].port):
+            self.table[route_dst] = TableEntry(dst=route_dst, port=port, latency=tim, expire_time=self.ROUTE_TTL+api.current_time())
 
     def handle_link_up(self, port, latency):
         """
