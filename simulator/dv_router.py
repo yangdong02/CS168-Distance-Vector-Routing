@@ -99,8 +99,10 @@ class DVRouter(DVRouterBase):
                             be used in conjunction with handle_link_up.
         :return: nothing.
         """
-        # TODO: fill this in!
-
+        assert force and (single_port is None)
+        for port in self.ports.get_all_ports():
+            for host, entry in self.table.items():
+                self.send_route(port=port, dst=host, latency=entry.latency)
     def expire_routes(self):
         """
         Clears out expired routes from table.
