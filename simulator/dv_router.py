@@ -29,10 +29,10 @@ class DVRouter(DVRouterBase):
     POISON_EXPIRED = True
 
     # Determines if you send updates when a link comes up
-    SEND_ON_LINK_UP = False
+    SEND_ON_LINK_UP = True
 
     # Determines if you send poison when a link goes down
-    POISON_ON_LINK_DOWN = False
+    POISON_ON_LINK_DOWN = True
 
     def __init__(self):
         """
@@ -52,7 +52,8 @@ class DVRouter(DVRouterBase):
         # This is the table that contains all current routes
         self.table = Table()
         self.table.owner = self
-
+        self.last_table = Table()
+        self.last_table.owner = self
 
     def add_static_route(self, host, port):
         """
@@ -87,10 +88,20 @@ class DVRouter(DVRouterBase):
         if entry.latency >= INFINITY:
             return
         self.send(packet, entry.port)
-
+    def send_single(self, force=False, port=None):
+        """
+        Send route advertisements for a single port in the table
+        Do NOT update last_table.
+        """
+        assert port is not None
+        for host, entry in self.table.items():
+            if not force and host in self.last_table and self.last_table[host] == entry: continue
+            if not self.SPLIT_HORIZON or port != entry.port:
+                self.send_route(port=port, dst=host, latency=entry.latency if entry.port!=port or not self.POISON_REVERSE else INFINITY)
+        
     def send_routes(self, force=False, single_port=None):
         """
-        Send route advertisements for all routes in the table.
+        Send route advertisements for all routes in the table and update last_table
 
         :param force: if True, advertises ALL routes in the table;
                       otherwise, advertises only those routes that have
@@ -99,11 +110,16 @@ class DVRouter(DVRouterBase):
                             be used in conjunction with handle_link_up.
         :return: nothing.
         """
-        assert force and (single_port is None)
-        for port in self.ports.get_all_ports():
-            for host, entry in self.table.items():
-                if not self.SPLIT_HORIZON or port != entry.port:
-                    self.send_route(port=port, dst=host, latency=entry.latency if entry.port!=port or not self.POISON_REVERSE else INFINITY)
+        if single_port:
+            assert single_port in self.ports.get_all_ports()
+            self.send_single(force, single_port)
+        else:
+            for port in self.ports.get_all_ports():
+                self.send_single(force, port)
+        self.last_table = self.table
+        self.table = Table(self.last_table)
+        assert id(self.last_table) != id(self.table)
+
     def expire_routes(self):
         """
         Clears out expired routes from table.
@@ -145,8 +161,8 @@ class DVRouter(DVRouterBase):
         :returns: nothing.
         """
         self.ports.add_port(port, latency)
-
-        # TODO: fill in the rest!
+        if self.SEND_ON_LINK_UP:
+            self.send_routes(force=True, single_port=port)
 
     def handle_link_down(self, port):
         """
@@ -156,7 +172,9 @@ class DVRouter(DVRouterBase):
         :returns: nothing.
         """
         self.ports.remove_port(port)
+        if self.POISON_ON_LINK_DOWN:
+            for k, v in self.table.items():
+                if v.port == port:
+                    self.table[k] = TableEntry(dst=v.dst, port=port, latency=INFINITY, expire_time=self.ROUTE_TTL+api.current_time())
+            self.send_routes(force=False)
 
-        # TODO: fill this in!
-
-    # Feel free to add any helper methods!
