@@ -5,6 +5,7 @@ Based on skeleton code by:
   MurphyMc, zhangwen0411, lab352
 """
 
+from collections import defaultdict
 import sim.api as api
 from cs168.dv import RoutePacket, \
                      Table, TableEntry, \
@@ -52,8 +53,7 @@ class DVRouter(DVRouterBase):
         # This is the table that contains all current routes
         self.table = Table()
         self.table.owner = self
-        self.last_table = Table()
-        self.last_table.owner = self
+        self.last_table = defaultdict(Table)
 
     def add_static_route(self, host, port):
         """
@@ -91,13 +91,16 @@ class DVRouter(DVRouterBase):
     def send_single(self, force=False, port=None):
         """
         Send route advertisements for a single port in the table
-        Do NOT update last_table.
+        Updates last_table.
         """
         assert port is not None
+        last = self.last_table[port]
         for host, entry in self.table.items():
-            if not force and host in self.last_table and self.last_table[host] == entry: continue
+            if not force and host in last and last[host] == entry: continue
             if not self.SPLIT_HORIZON or port != entry.port:
                 self.send_route(port=port, dst=host, latency=entry.latency if entry.port!=port or not self.POISON_REVERSE else INFINITY)
+        self.last_table[port] = Table(self.table)
+        assert id(self.last_table[port]) != id(self.table)
         
     def send_routes(self, force=False, single_port=None):
         """
@@ -116,9 +119,6 @@ class DVRouter(DVRouterBase):
         else:
             for port in self.ports.get_all_ports():
                 self.send_single(force, port)
-        self.last_table = self.table
-        self.table = Table(self.last_table)
-        assert id(self.last_table) != id(self.table)
 
     def expire_routes(self):
         """
