@@ -1,5 +1,7 @@
 """
-Your awesome Distance Vector router for CS 168
+My Distance Vector router for CS 168
+
+Author: Yang Dong, CSH 91, Xi'an Jiaotong University
 
 Based on skeleton code by:
   MurphyMc, zhangwen0411, lab352
