@@ -114,10 +114,6 @@ class DVRouter(DVRouterBase):
                             be used in conjunction with handle_link_up.
         :return: nothing.
         """
-        print(id(self), "send routes, history = ")
-        print(self.last_table)
-        print("current = ")
-        print(self.table)
         self.expire_routes()
         if single_port:
             assert single_port in self.ports.get_all_ports()
@@ -134,7 +130,6 @@ class DVRouter(DVRouterBase):
         Clears out expired routes from table.
         accordingly.
         """
-        print(id(self), " expire routes")
         nt = Table()
         for k, v in self.table.items():
             if v.expire_time > api.current_time():
@@ -152,7 +147,6 @@ class DVRouter(DVRouterBase):
         :param port: the port that the advertisement arrived on.
         :return: nothing.
         """
-        print(id(self), f" handle ad: route_dst={route_dst}, route_latency={route_latency}, port={port}")
         if route_latency == INFINITY: # poisoned
             if route_dst in self.table and self.table[route_dst].port == port:
                 entry = self.table[route_dst]
@@ -172,7 +166,6 @@ class DVRouter(DVRouterBase):
         :param latency: the link latency.
         :returns: nothing.
         """
-        print(id(self), "port", port, "up with latency", latency)
         self.ports.add_port(port, latency)
         if self.SEND_ON_LINK_UP:
             self.send_routes(force=True, single_port=port)
@@ -184,7 +177,6 @@ class DVRouter(DVRouterBase):
         :param port: the port number used by the link.
         :returns: nothing.
         """
-        print(id(self), "port", port, "down!")
         self.ports.remove_port(port)
         if self.POISON_ON_LINK_DOWN:
             for k, v in self.table.items():
